@@ -10,7 +10,7 @@ namespace polyrith
 
 -- # Poly Datatype
 
-meta inductive poly
+inductive poly
 |const: ℚ → poly 
 |var: ℕ → poly
 |add: poly → poly → poly
@@ -31,6 +31,7 @@ meta instance : has_add poly := ⟨poly.add⟩
 meta instance : has_mul poly := ⟨poly.mul⟩
 meta instance : has_pow poly ℕ := ⟨poly.pow⟩ 
 meta instance : has_repr poly := ⟨poly.mk_string⟩  
+meta instance : has_to_string poly := ⟨poly.mk_string⟩  
 
 -- # Parsing algorithms
 local notation `exmap` := list (expr × ℕ)
@@ -235,6 +236,7 @@ do
   sage_out ← sage_output [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
+  trace coeffs_as_poly,
   linear_combo.linear_combination (eq_names.map expr.local_pp_name) coeffs_as_pexpr
 
 constant p : ℚ → Prop 
