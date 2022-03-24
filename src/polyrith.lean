@@ -31,7 +31,7 @@ meta instance : has_add poly := ⟨poly.add⟩
 meta instance : has_mul poly := ⟨poly.mul⟩
 meta instance : has_pow poly ℕ := ⟨poly.pow⟩ 
 meta instance : has_repr poly := ⟨poly.mk_string⟩  
-meta instance : has_to_string poly := ⟨poly.mk_string⟩  
+meta instance : has_to_format poly := ⟨to_fmt ∘ poly.mk_string⟩  
 
 -- # Parsing algorithms
 local notation `exmap` := list (expr × ℕ)
@@ -226,21 +226,35 @@ meta def get_var_names : exmap → list string
 
 
 -- # main tactic
+#check complex.I 
+#check complex.I_sq
+example : complex.I * complex.I = -1 :=
+by ring_nf; simp only [complex.I_sq]; ring
 
 meta def polyrith : tactic unit :=
 do
+  sleep 10, -- can lead to weird errors when actively editing code with polyrith calls
   (m, p, R) ← parse_target_to_poly,
   (eq_names, m, polys) ← parse_ctx_to_polys R m,
   trace $ polys.mmap (poly.to_pexpr m) >>= mmap to_expr,
-  trace eq_names,
   sage_out ← sage_output [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
-  trace coeffs_as_poly,
-  linear_combo.linear_combination (eq_names.map expr.local_pp_name) coeffs_as_pexpr
+  trace coeffs_as_pexpr,
+  let eq_names := eq_names.map expr.local_pp_name,  
+  coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
+  expr_string ← (eq_names.zip coeffs_as_expr).mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ " " ++ to_string ps) "",
+  linear_combo.linear_combination eq_names coeffs_as_pexpr,
+  trace!"Try this: linear_combination{expr_string}"
 
 constant p : ℚ → Prop 
-constants (R : Type) [inst_R : comm_ring R] [inst_R_sub : has_sub R]
+constants (R : Type) [inst_R : comm_ring R]
+
+example (a b c d : ℚ) (h : a + b = 0) (h2 : c + d = 0) : c + a + d + b = 0 :=
+begin 
+  linear_combination (h, 1) (h2, 1),
+end 
+
 example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 2*x + 2*y = 0 :=
 begin 
     polyrith, 
