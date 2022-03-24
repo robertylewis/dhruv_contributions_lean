@@ -152,7 +152,7 @@ meta def parser_output_checker : string ⊕ (list poly) → tactic (list poly)
 |(sum.inr poly_list) := return poly_list
 
 meta def convert_sage_output : string → tactic (list poly)
-|s := (let sage_stuff := sage_output_parser.run_string (remove_trailing_whitespace s) in trace ("|" ++ remove_trailing_whitespace s ++ "|") >> parser_output_checker (sage_stuff))
+|s := (let sage_stuff := sage_output_parser.run_string (remove_trailing_whitespace s) in parser_output_checker sage_stuff)
 
 constant x:ℚ
 run_cmd let sg := "(poly.var 2) (poly.const 1/1) " in convert_sage_output sg >>= list.mmap (poly.to_pexpr [(`(x), 2)]) >>= list.mmap to_expr >>= trace
