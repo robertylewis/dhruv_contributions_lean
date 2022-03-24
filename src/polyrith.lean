@@ -133,8 +133,15 @@ meta def poly_parser : parser poly := do
 
 meta def one_of_many_poly_parser : parser poly := do
   p ← poly_parser,
-  ch ' ',
+  optional $ ch ' ',
   return p
+
+@[derive decidable]
+meta def _root_.char.is_whitespace' (c : char) : Prop :=
+c.is_whitespace ∨ c.to_nat = 13
+
+meta def remove_trailing_whitespace : string → string 
+| s := if s.back.is_whitespace' then remove_trailing_whitespace s.pop_back else s
 
 meta def sage_output_parser : parser (list poly) := do
   poly_list ← many (one_of_many_poly_parser),
@@ -145,7 +152,7 @@ meta def parser_output_checker : string ⊕ (list poly) → tactic (list poly)
 |(sum.inr poly_list) := return poly_list
 
 meta def convert_sage_output : string → tactic (list poly)
-|s := (let sage_stuff := sage_output_parser.run_string s in parser_output_checker sage_stuff)
+|s := (let sage_stuff := sage_output_parser.run_string (remove_trailing_whitespace s) in trace ("|" ++ remove_trailing_whitespace s ++ "|") >> parser_output_checker (sage_stuff))
 
 constant x:ℚ
 run_cmd let sg := "(poly.var 2) (poly.const 1/1) " in convert_sage_output sg >>= list.mmap (poly.to_pexpr [(`(x), 2)]) >>= list.mmap to_expr >>= trace
@@ -226,16 +233,15 @@ do
   trace $ polys.mmap (poly.to_pexpr m) >>= mmap to_expr,
   trace eq_names,
   sage_out ← sage_output [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
-  trace sage_out,
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
-  linear_combo.linear_combination (eq_names.map expr.const_name) coeffs_as_pexpr
+  linear_combo.linear_combination (eq_names.map expr.local_pp_name) coeffs_as_pexpr
 
 constant p : ℚ → Prop 
 constants (R : Type) [inst_R : comm_ring R] [inst_R_sub : has_sub R]
 example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 2*x + 2*y = 0 :=
 begin 
-    polyrith,
+    polyrith, 
     assumption,
 end
 end polyrith
