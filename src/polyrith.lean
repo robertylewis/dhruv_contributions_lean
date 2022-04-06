@@ -97,9 +97,18 @@ meta def var_parser : parser poly := do
   n ← nat,
   return (poly.var n)
 
+meta def neg_nat_parser : parser int := do
+  ch '-',
+  n ← nat,
+  return (- n)
+
+meta def nat_as_int_parser : parser int := do
+  n ← nat,
+  return (n)
+
 meta def const_fraction_parser : parser poly := do
   str "poly.const ",
-  numer ← nat,
+  numer ← neg_nat_parser <|> nat_as_int_parser,
   ch '/',
   denom ← nat,
   return (poly.const (numer/denom))
@@ -149,21 +158,15 @@ meta def sage_output_parser : parser (list poly) := do
   return poly_list
 
 meta def parser_output_checker : string ⊕ (list poly) → tactic (list poly) 
-|(sum.inl s) := fail "parser didn't work"
+|(sum.inl s) := fail "poly parser didn't work - likely a bad output from sage"
 |(sum.inr poly_list) := return poly_list
 
 meta def convert_sage_output : string → tactic (list poly)
 |s := (let sage_stuff := sage_output_parser.run_string (remove_trailing_whitespace s) in parser_output_checker sage_stuff)
 
-constant x:ℚ
-run_cmd let sg := "(poly.var 2) (poly.const 1/1) " in convert_sage_output sg >>= list.mmap (poly.to_pexpr [(`(x), 2)]) >>= list.mmap to_expr >>= trace
-
-#eval poly_parser.run_string "(poly.pow (poly.var 4) 5)"
-#eval poly_parser.run_string "(poly.mul (poly.const 1/1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.var 1)))))"
-#eval poly_parser.run_string "(poly.mul (poly.const 3/4) (poly.var 0))"
-#eval poly_parser.run_string "(poly.sum (poly.mul (poly.const 1/1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.var 1))))) (poly.sum (poly.mul (poly.const 7/1) (poly.mul (poly.var 1) (poly.mul (poly.var 0) (poly.var 0)))) (poly.mul (poly.const 3/4) (poly.var 0))))"
-#eval sage_output_parser.run_string "(poly.const 1/1) (poly.const 1/1) "
-run_cmd poly.to_pexpr [(`(x), 0)] (poly.mul (poly.const (5/3)) (poly.var 0)) >>= to_expr >>= trace
+-- constants x y :ℚ
+-- run_cmd let sg := "(poly.sum (poly.mul (poly.const -4/1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.var 1))))) (poly.mul (poly.const 1/1) (poly.mul (poly.var 1) (poly.mul (poly.var 2) (poly.var 2)))))" in 
+-- convert_sage_output sg >>= list.mmap (poly.to_pexpr [(`(x), 1), (`(y), 2)]) >>= list.mmap to_expr >>= trace
 
 local notation `reduc` := transparency.reducible
 
@@ -173,8 +176,6 @@ meta def equality_to_left_side : expr → tactic expr
     out_expr ← to_expr ``(%%lhs - %%rhs),
     return out_expr
 | e := fail "expression is not an equality"
-
--- run_cmd equality_to_left_side `(4 = 5)
 
 meta def parse_target_to_poly : tactic (exmap × poly × expr) :=
 do 
@@ -192,16 +193,8 @@ do
 meta def is_eq_of_type : expr → expr → tactic bool
 | expt h_eq := (do `(@eq %%R _ _) ← infer_type h_eq, unify expt R, return tt) <|> return ff
 
-
--- |expt `(@eq %%R _ _) := 
--- (do unify expt R, return tt) <|> return ff
--- |expt e := return ff
-
 meta def get_equalities_of_type : expr → list expr → tactic (list expr)
 | expt l := l.mfilter (is_eq_of_type expt)
-
--- constants (x y : ℤ) (z : ℚ)
--- run_cmd get_equalities_of_type `(ℤ) [`(x=5)] >>= trace
 
 meta def parse_ctx_to_polys : expr → exmap → tactic (list expr × exmap × list poly)
 | expt m :=
@@ -224,25 +217,30 @@ meta def get_var_names : exmap → list string
 | [] := []
 | ((e, n) :: tl) := ("var" ++ to_string n) :: (get_var_names tl)
 
-
--- # main tactic
 #check complex.I 
 #check complex.I_sq
 example : complex.I * complex.I = -1 :=
 by ring_nf; simp only [complex.I_sq]; ring
+
+-- # main tactic
 
 meta def polyrith : tactic unit :=
 do
   sleep 10, -- can lead to weird errors when actively editing code with polyrith calls
   (m, p, R) ← parse_target_to_poly,
   (eq_names, m, polys) ← parse_ctx_to_polys R m,
-  trace $ polys.mmap (poly.to_pexpr m) >>= mmap to_expr,
+  -- trace $ polys.mmap (poly.to_pexpr m) >>= mmap to_expr,
+  -- trace R, 
+  -- trace $ get_var_names m, 
+  -- trace (polys.map poly.mk_string),
+  -- trace p.mk_string,
   sage_out ← sage_output [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
+  -- trace sage_out,
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
-  trace coeffs_as_pexpr,
   let eq_names := eq_names.map expr.local_pp_name,  
   coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
+  -- trace coeffs_as_expr,
   expr_string ← (eq_names.zip coeffs_as_expr).mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ " " ++ to_string ps) "",
   linear_combo.linear_combination eq_names coeffs_as_pexpr,
   trace!"Try this: linear_combination{expr_string}"
@@ -255,9 +253,36 @@ begin
   linear_combination (h, 1) (h2, 1),
 end 
 
-example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 2*x + 2*y = 0 :=
+example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 + x*y^3 = 0 :=
 begin 
-    polyrith, 
-    assumption,
+    linear_combination (h, 4 * (y * (x * (x * x))) + ((-4) * (x * (x * (x * x))) + 1 * (x * (y * y)))) (h1, 4 * (x * (x * x))),
 end
+
+theorem T
+  (a b x1 y1 x2 y2 x4 y4 :ℚ )
+  (A :y1*y1-x1*x1*x1-a*x1-b = 0)
+  (B :y2*y2-x2*x2*x2-a*x2-b = 0)
+  (C :y4*y4-x4*x4*x4-a*x4-b = 0)
+  {i3:ℚ} (Hi3:i3*(x2-x1)-1=0)
+  {k3:ℚ} (Hk3:(y2-y1)*i3-k3=0)
+  {x3:ℚ} (Hx3:k3*k3-x1-x2-x3=0)
+  {y3:ℚ} (Hy3:k3*(x1-x3)-y1-y3=0)
+  {i7:ℚ} (Hi7:i7*(x4-x3)-1=0)
+  {k7:ℚ} (Hk7:(y4-y3)*i7-k7=0)
+  {x7:ℚ} (Hx7:k7*k7-x3-x4-x7=0)
+  {y7:ℚ} (Hy7:k7*(x3-x7)-y3-y7=0)
+  {i6:ℚ} (Hi6:i6*(x4-x2)-1=0)
+  {k6:ℚ} (Hk6:(y4-y2)*i6-k6=0)
+  {x6:ℚ} (Hx6:k6*k6-x2-x4-x6=0)
+  {y6:ℚ} (Hy6:k6*(x2-x6)-y2-y6=0)
+  {i9:ℚ} (Hi9:i9*(x6-x1)-1=0)
+  {k9:ℚ} (Hk9:(y6-y1)*i9-k9=0)
+  {x9:ℚ} (Hx9:k9*k9-x1-x6-x9=0)
+  {y9:ℚ} (Hy9:k9*(x1-x9)-y1-y9=0)
+  : x9 - x7 = 0 ∧ y9 - y7 = 0 :=
+begin 
+  split, 
+  polyrith,
+end
+
 end polyrith

@@ -132,7 +132,8 @@ def polynomial_to_string(p):
     out = []
     for i in range(len(coeffs)):
         try:
-            n = int(str(monomials[i]))
+            _ = int(str(monomials[i]))
+            n = coeffs[i]
             out.append(const_string(n))
         except ValueError:
             out.append("(poly.mul " + const_string(coeffs[i]) + " " + monomial_to_string(monomials[i]) + ")")
@@ -140,14 +141,15 @@ def polynomial_to_string(p):
 '''
 
 def type_str(type):
-    if type == "rat":
-        return "QQ"
-    elif type == "int":
-        return "ZZ"
-    elif type == "real":
-        return "RR"
-    elif type == "complex":
-        return "CC"
+    # if type == "rat":
+    #     return "QQ"
+    # elif type == "int":
+    #     return "ZZ"
+    # elif type == "real":
+    #     return "RR"
+    # elif type == "complex":
+    #     return "CC"
+    return "QQ"
 
 def var_names(var_list_string):
     out = ""
@@ -197,5 +199,16 @@ def main():
     # for elt in sys.argv[1:]:
     #     print(elt)
 
+def alt():
+    command = create_query("rat", "[var2, var1]",
+     "[((var1 + var2) + (-1 * 0)), ((var1 * var1) + (-1 * 0))]", "(((2 * var1) + (2 * var2)) + (-1 * 0))")
+    final_query = sage_functions + "\n" + command
+    output = evaluate_in_sage(final_query).replace("'", "")
+    output = output.replace(",", "")
+    output = output.replace("[", "").replace("]", "").strip()
+    output += " "
+    print(output)
+
 if __name__ == "__main__":
     main()
+    #alt()
