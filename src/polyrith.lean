@@ -208,7 +208,7 @@ do
 
 -- # Connecting with Python
 meta def sage_output (arg_list : list string := []) : tactic string :=
-let args := ["src/test.py"] ++ arg_list in
+let args := ["src/test2.py"] ++ arg_list in
 do
   s ← tactic.unsafe_run_io $ io.cmd { cmd := "python3", args := args},
   return s
@@ -235,7 +235,7 @@ do
   -- trace (polys.map poly.mk_string),
   -- trace p.mk_string,
   sage_out ← sage_output [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
-  -- trace sage_out,
+  trace sage_out,
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
   let eq_names := eq_names.map expr.local_pp_name,  
@@ -275,6 +275,32 @@ theorem T
   {k6:ℚ} (Hk6:(y4-y2)*i6-k6=0)
   {x6:ℚ} (Hx6:k6*k6-x2-x4-x6=0)
   {y6:ℚ} (Hy6:k6*(x2-x6)-y2-y6=0)
+  {i9:ℚ} (Hi9:i9*(x6-x1)-1=0)
+  {k9:ℚ} (Hk9:(y6-y1)*i9-k9=0)
+  {x9:ℚ} (Hx9:k9*k9-x1-x6-x9=0)
+  {y9:ℚ} (Hy9:k9*(x1-x9)-y1-y9=0)
+  : x9 - x7 = 0 ∧ y9 - y7 = 0 :=
+begin 
+  split, sorry, sorry,
+end
+
+theorem TT
+  (a b x1 y1 x2 y2 x4 y4 :ℚ )
+  (A :y1*y1-x1*x1*x1-a*x1-b = 0)
+  (B :y2*y2-x2*x2*x2-a*x2-b = 0)
+  (C :y4*y4-x4*x4*x4-a*x4-b = 0)
+  {i3:ℚ} (Hi3:i3*(x2-x1)-1=0)
+  {k3:ℚ} (Hk3:(y2-y1)*i3-k3=0)
+  {x3:ℚ} 
+  {y3:ℚ} 
+  {i7:ℚ} 
+  {k7:ℚ} 
+  {x7:ℚ} (Hx7:k7*k7-x3-x4-x7=0)
+  {y7:ℚ} (Hy7:k7*(x3-x7)-y3-y7=0)
+  {i6:ℚ} 
+  {k6:ℚ} 
+  {x6:ℚ} 
+  {y6:ℚ} 
   {i9:ℚ} (Hi9:i9*(x6-x1)-1=0)
   {k9:ℚ} (Hk9:(y6-y1)*i9-k9=0)
   {x9:ℚ} (Hx9:k9*k9-x1-x6-x9=0)
