@@ -4,6 +4,24 @@ import system.io
 import algebra
 import tactic.linear_combination
 
+/--
+`int.to_pexpr n` creates a `pexpr` that will evaluate to `n`.
+The `pexpr` does not hold any typing information:
+`to_expr ``((%%(int.to_pexpr (-5)) : ℚ))` will create a native integer numeral `(-5 : ℚ)`.
+
+note: in a mathlib PR
+-/
+meta def int.to_pexpr : ℤ → pexpr
+| (int.of_nat k) := k.to_pexpr
+| (int.neg_succ_of_nat k) := ``(-%%((k+1).to_pexpr))
+
+-- also in pr
+meta def rat.to_pexpr (q : ℚ) : pexpr :=
+let n := q.num,
+    d := q.denom in
+if d = 1 ∨ n = 0 then n.to_pexpr
+else ``(%%n.to_pexpr / %%d.to_pexpr)
+
 open native tactic
 
 namespace polyrith
@@ -15,17 +33,14 @@ inductive poly
 |var: ℕ → poly
 |add: poly → poly → poly
 |mul: poly → poly → poly
+|pow : poly → ℕ → poly
 
 meta def poly.mk_string : poly → string
 | (poly.const z) := to_string z
 | (poly.var n) := "var" ++ to_string n
 | (poly.add p q) := "(" ++ poly.mk_string p ++ " + " ++ poly.mk_string q ++ ")"
 | (poly.mul p q) := "(" ++ poly.mk_string p ++ " * " ++ poly.mk_string q ++ ")"
-
-@[reducible] meta def poly.pow : poly → ℕ → poly
-| _ 0 := poly.const 1
-| p 1 := p
-| p (nat.succ n) := poly.mul p (poly.pow p n)
+| (poly.pow p n) := to_string $ format!"({poly.mk_string p} ^ {n})"
 
 meta instance : has_add poly := ⟨poly.add⟩ 
 meta instance : has_mul poly := ⟨poly.mul⟩
@@ -74,7 +89,7 @@ meta def has_val: ℕ → (expr × ℕ) → tactic unit
 
 
 meta def poly.to_pexpr :exmap → poly → tactic pexpr
-| _ (poly.const z) := return $  ``(%%z)
+| _ (poly.const z) := return z.to_pexpr
 | m (poly.var n) := 
   do
     (e, num) ← m.mfind (has_val n),
@@ -89,6 +104,10 @@ meta def poly.to_pexpr :exmap → poly → tactic pexpr
     p_pexpr ← poly.to_pexpr m p,
     q_pexpr ← poly.to_pexpr m q,
     return ``(%%p_pexpr * %%q_pexpr)
+| m (poly.pow p n) := 
+  do 
+    p_pexpr ← poly.to_pexpr m p, 
+    return ``(%%p_pexpr ^ %%n)
 
 -- # Parsing sage output to poly
 open parser
@@ -168,6 +187,7 @@ meta def convert_sage_output : string → tactic (list poly)
 -- run_cmd let sg := "(poly.sum (poly.mul (poly.const -4/1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.mul (poly.var 1) (poly.var 1))))) (poly.mul (poly.const 1/1) (poly.mul (poly.var 1) (poly.mul (poly.var 2) (poly.var 2)))))" in 
 -- convert_sage_output sg >>= list.mmap (poly.to_pexpr [(`(x), 1), (`(y), 2)]) >>= list.mmap to_expr >>= trace
 
+
 local notation `reduc` := transparency.reducible
 
 meta def equality_to_left_side : expr → tactic expr 
@@ -224,7 +244,9 @@ by ring_nf; simp only [complex.I_sq]; ring
 
 -- # main tactic
 
-meta def polyrith : tactic unit :=
+declare_trace polyrith
+
+meta def _root_.tactic.interactive.polyrith : tactic unit :=
 do
   sleep 10, -- can lead to weird errors when actively editing code with polyrith calls
   (m, p, R) ← parse_target_to_poly,
@@ -234,16 +256,22 @@ do
   -- trace $ get_var_names m, 
   -- trace (polys.map poly.mk_string),
   -- trace p.mk_string,
-  sage_out ← sage_output [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
-  trace sage_out,
+  let args := [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
+  let args := to_string (is_trace_enabled_for `polyrith) :: args,
+  sage_out ← sage_output args,
+  if is_trace_enabled_for `polyrith then 
+    trace sage_out
+  else do 
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
   let eq_names := eq_names.map expr.local_pp_name,  
   coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
   -- trace coeffs_as_expr,
-  expr_string ← (eq_names.zip coeffs_as_expr).mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ " " ++ to_string ps) "",
   linear_combo.linear_combination eq_names coeffs_as_pexpr,
-  trace!"Try this: linear_combination{expr_string}"
+  let components := (eq_names.zip coeffs_as_expr).filter $ λ pr, bnot $ pr.2.is_app_of `has_zero.zero,
+  expr_string ← components.mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ format.line ++ ps) "",
+  let cmd : format := "linear_combination" ++ format.nest 2 (format.group expr_string),
+  trace!"Try this: {cmd}"
 
 constant p : ℚ → Prop 
 constants (R : Type) [inst_R : comm_ring R]
@@ -253,9 +281,11 @@ begin
   linear_combination (h, 1) (h2, 1),
 end 
 
-example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 + x*y^3 = 0 :=
+-- set_option trace.polyrith true
+
+example (x y z: ℤ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 + x*y^3 = 0 :=
 begin 
-    linear_combination (h, 4 * (y * (x * (x * x))) + ((-4) * (x * (x * (x * x))) + 1 * (x * (y * y)))) (h1, 4 * (x * (x * x))),
+  linear_combination (h, y ^ 2 * x) (h1, 4 * (y ^ 2 * x)),
 end
 
 theorem T
@@ -308,7 +338,6 @@ theorem TT
   : x9 - x7 = 0 ∧ y9 - y7 = 0 :=
 begin 
   split, 
-  polyrith,
 end
 
 end polyrith

@@ -190,19 +190,20 @@ def mul_vars_string(var_list):
     if var_list == []:
         return const_string(1)
     elif len(var_list) == 1:
-        return var_string(var_list[0])
-    return "(poly.mul " + var_string(var_list[0]) + " " + mul_vars_string(var_list[1:]) + ")"
+        return var_list[0]
+    return f'(poly.mul {mul_vars_string(var_list[:-1])} {var_list[-1]})'
+
+# assumes a monomial is always (var^nat)*(var^nat)... true?
+def format_monom_component(e):
+    if "^" not in e:
+        return var_string(e) 
+    base, exp = e.split("^")
+    return f'(poly.pow {var_string(base)} {int(exp)})'
 
 def monomial_to_string(m):
     m = str(m)
     m_list = m.replace(" ", "").split("*")
-    var_things = m_list.copy()
-    
-    for var_thing in m_list:
-        if "^" in var_thing:
-            temp = var_thing.split("^")
-            var_things.remove(var_thing)
-            var_things += [temp[0]] * int(temp[1])
+    var_things = [format_monom_component(e) for e in m_list]
     return mul_vars_string(var_things)
 
 def poly_terms_string(terms):
@@ -210,7 +211,7 @@ def poly_terms_string(terms):
         return const_string(1)
     elif len(terms) == 1:
         return terms[0]
-    return "(poly.sum " + terms[0] + " " + poly_terms_string(terms[1:]) + ")"
+    return f'(poly.sum {poly_terms_string(terms[:-1])} {terms[-1]})'
 
 def polynomial_to_string(p):
     monomials = p.monomials()
@@ -222,6 +223,8 @@ def polynomial_to_string(p):
         if str(monomials[i]) == "1":
             n = QQ(float(coeffs[i]))
             out.append(const_string(n))
+        elif str(coeffs[i]) == "1":
+            out.append(monomial_to_string(monomials[i]))
         else:
             out.append("(poly.mul " + const_string(coeffs[i]) + " " + monomial_to_string(monomials[i]) + ")")
     return poly_terms_string(out)
@@ -249,8 +252,9 @@ def create_query(type: str, var_list, eq_list, goal_type):
 {var_names(var_list)} = {type_str(type)}['{var_names(var_list)}'].gens()
 gens = {eq_list}
 p = {goal_type}
-basis, coeffs, r = ideal_membership(p, gens)
-print(list(map(polynomial_to_string, coeffs[0])))
+I = ideal(gens)
+coeffs = p.lift(I)
+print(list(map(polynomial_to_string, coeffs)))
 '''
     return query
 
@@ -275,13 +279,16 @@ def evaluate_in_sage(query: str, format=False) -> str:
 
 
 def main():
-    command = create_query(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    command = create_query(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
     final_query = sage_functions + "\n" + command
-    output = evaluate_in_sage(final_query).replace("'", "")
-    output = output.replace(",", "")
-    output = output.replace("[", "").replace("]", "").strip()
-    output += " "
-    print(output)
+    if sys.argv[1] == 'tt': # trace enabled
+        print(final_query)
+    else:
+        output = evaluate_in_sage(final_query).replace("'", "")
+        output = output.replace(",", "")
+        output = output.replace("[", "").replace("]", "").strip()
+        output += " "
+        print(output)
 
     # for elt in sys.argv[1:]:
     #     print(elt)
