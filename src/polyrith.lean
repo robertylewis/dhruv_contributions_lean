@@ -3,6 +3,7 @@ import data.complex.basic
 import system.io
 import algebra
 import tactic.linear_combination
+import data.buffer.parser.numeral
 
 /--
 `int.to_pexpr n` creates a `pexpr` that will evaluate to `n`.
@@ -110,7 +111,9 @@ meta def poly.to_pexpr :exmap → poly → tactic pexpr
     return ``(%%p_pexpr ^ %%n)
 
 -- # Parsing sage output to poly
+
 open parser
+
 meta def var_parser : parser poly := do
   str "poly.var ",
   n ← nat,
@@ -242,6 +245,15 @@ meta def get_var_names : exmap → list string
 example : complex.I * complex.I = -1 :=
 by ring_nf; simp only [complex.I_sq]; ring
 
+-- # Format output 
+
+meta def to_mul_fmt (term : expr × expr) : tactic format := 
+if term.2.is_app_of `has_one.one then pp term.1 else do
+  hyp ← pp term.1,
+  coeff ← pp term.2, 
+  let coeff := if term.2.is_app_of `has_add.add then format!"({coeff})" else coeff,
+  return format!"{coeff} * {hyp}"
+
 -- # main tactic
 
 declare_trace polyrith
@@ -264,13 +276,14 @@ do
   else do 
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
-  let eq_names := eq_names.map expr.local_pp_name,  
+  let eq_names' := eq_names.map pexpr.of_expr,  
   coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
   -- trace coeffs_as_expr,
-  linear_combo.linear_combination eq_names coeffs_as_pexpr,
+  linear_combo.linear_combination eq_names' coeffs_as_pexpr,
   let components := (eq_names.zip coeffs_as_expr).filter $ λ pr, bnot $ pr.2.is_app_of `has_zero.zero,
-  expr_string ← components.mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ format.line ++ ps) "",
-  let cmd : format := "linear_combination" ++ format.nest 2 (format.group expr_string),
+  expr_string ← format.intercalate (format.of_string " +" ++ format.line) <$> components.mmap to_mul_fmt,
+  -- expr_string ← components.mfoldl (λ s p, do ps ← to_mul_fmt p, return $ s ++ format.of_string "+" ++ format.line ++ ps) "",
+  let cmd : format := "linear_combination " ++ format.nest 2 (format.group expr_string),
   trace!"Try this: {cmd}"
 
 constant p : ℚ → Prop 
@@ -278,14 +291,14 @@ constants (R : Type) [inst_R : comm_ring R]
 
 example (a b c d : ℚ) (h : a + b = 0) (h2 : c + d = 0) : c + a + d + b = 0 :=
 begin 
-  linear_combination (h, 1) (h2, 1),
+  linear_combination h + h2,-- linear_combination (h, 1) (h2, 1),
 end 
 
 -- set_option trace.polyrith true
 
 example (x y z: ℤ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 + x*y^3 = 0 :=
 begin 
-  linear_combination (h, y ^ 2 * x) (h1, 4 * (y ^ 2 * x)),
+  polyrith, -- linear_combination (h, y ^ 2 * x) (h1, 4 * (y ^ 2 * x)),
 end
 
 theorem T
