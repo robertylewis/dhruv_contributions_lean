@@ -199,7 +199,6 @@ meta def get_equalities_of_type : expr → list expr → tactic (list expr)
 | expt l := l.mfilter (is_eq_of_type expt)
 
 meta def parse_ctx_to_polys : expr → exmap → bool → list pexpr → tactic (list expr × exmap × list poly)
-<<<<<<< Updated upstream
 | expt m only_on hyps:=
 do
   hyps ← hyps.mmap $ λ e, i_to_expr e,
@@ -208,13 +207,6 @@ do
   -- trace hyps,
   eq_names ← get_equalities_of_type expt hyps,
   -- trace eq_names,
-=======
-| expt m only_on hyps :=
-do
-  hyps ← hyps.mmap $ λ e, i_to_expr e,
-  hyps ← if only_on then return hyps else (++ hyps) <$> local_context,
-  eq_names ← get_equalities_of_type expt hyps,
->>>>>>> Stashed changes
   eqs ← eq_names.mmap infer_type,
   -- trace eqs,
   eqs_to_left ← eqs.mmap equality_to_left_side,
@@ -236,21 +228,14 @@ meta def get_var_names : exmap → list string
  
 -- # main tactic
 
-<<<<<<< Updated upstream
-meta def tactic.polyrith (only_on : bool) (hyps : list pexpr) : tactic unit :=
-=======
 declare_trace polyrith
 
 meta def tactic.polyrith (only_on : bool) (hyps : list pexpr): tactic unit :=
->>>>>>> Stashed changes
 do
   sleep 10, -- can lead to weird errors when actively editing code with polyrith calls
   (m, p, R) ← parse_target_to_poly,
   (eq_names, m, polys) ← parse_ctx_to_polys R m only_on hyps,
-<<<<<<< Updated upstream
   trace eq_names,
-=======
->>>>>>> Stashed changes
   -- trace $ polys.mmap (poly.to_pexpr m) >>= mmap to_expr,
   -- trace R, 
   -- trace $ get_var_names m, 
@@ -260,22 +245,6 @@ do
   -- trace sage_out,
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
-<<<<<<< Updated upstream
-  let eq_names := eq_names.map expr.local_pp_name,  --has_to_format.to_format,
-  trace eq_names,
-  coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
-  -- trace coeffs_as_expr,
-  expr_string ← (eq_names.zip coeffs_as_expr).mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ " " ++ to_string ps) "",
-  linear_combo.linear_combination eq_names coeffs_as_pexpr,
-  trace!"Try this: linear_combination{expr_string}"
-
---## interactivity
-setup_tactic_parser
-
-meta def _root_.tactic.interactive.polyrith (restr : parse (tk "only")?) 
-  (hyps : parse pexpr_list?) : tactic unit := 
-tactic.polyrith restr.is_some (hyps.get_or_else [])
-=======
   -- let eq_names := eq_names.map to_pexpr,--expr.local_pp_name,  TODO
   coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
   -- trace coeffs_as_expr,
@@ -293,7 +262,6 @@ setup_tactic_parser
 meta def _root_.tactic.interactive.polyrith (restr : parse (tk "only")?) 
   (hyps : parse pexpr_list?) : tactic unit :=
   tactic.polyrith restr.is_some (hyps.get_or_else [])
->>>>>>> Stashed changes
 
 add_hint_tactic "polyrith"
 end polyrith
