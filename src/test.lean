@@ -2,6 +2,10 @@
 import polyrith
 --## examples
 
+<<<<<<< Updated upstream
+=======
+-- set_option trace.polyrith true
+>>>>>>> Stashed changes
 
 constant term : ∀ a b : ℚ, a + b = 0 
 -- (h : a + b = 0)
@@ -10,9 +14,22 @@ begin
   polyrith only [h1, term a b],
 end 
 
+<<<<<<< Updated upstream
 example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 = -x*y^3 :=
 begin 
     linear_combination (h, 1 * (x * (y * y))) (h1, 4 * (x * (y * y))),
+=======
+constant term : ∀ a b : ℚ, a + b = 0 
+-- (h : a + b = 0)
+example (a b c d : ℚ) (h1 : a + b = 0) (h2 : c + d = 0) (h3 : a + c = 0) (h4 : b + d = 0): c + a + d + b = 0 :=
+begin 
+  linear_combination (h1, 1) (h2, 1),
+end 
+
+example (x y z: ℚ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 = -x*y^3 :=
+begin 
+    linear_combination (h, y ^ 2 * x) (h1, 4 * (y ^ 2 * x)),
+>>>>>>> Stashed changes
 end
 
 theorem T
