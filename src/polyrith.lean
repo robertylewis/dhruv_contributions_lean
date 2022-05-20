@@ -3,6 +3,7 @@ import data.complex.basic
 import system.io
 import algebra
 import tactic.linear_combination
+import data.buffer.parser
 
 /--
 `int.to_pexpr n` creates a `pexpr` that will evaluate to `n`.
@@ -177,7 +178,7 @@ meta def sage_output_parser : parser (list poly) := do
   return poly_list
 
 meta def parser_output_checker : string ⊕ (list poly) → tactic (list poly) 
-|(sum.inl s) := fail "poly parser didn't work - likely a bad output from sage"
+|(sum.inl s) := fail "The goal cannot be generated with the chosen hypotheses."
 |(sum.inr poly_list) := return poly_list
 
 meta def convert_sage_output : string → tactic (list poly)
@@ -216,11 +217,13 @@ meta def is_eq_of_type : expr → expr → tactic bool
 meta def get_equalities_of_type : expr → list expr → tactic (list expr)
 | expt l := l.mfilter (is_eq_of_type expt)
 
-meta def parse_ctx_to_polys : expr → exmap → tactic (list expr × exmap × list poly)
-| expt m :=
+meta def parse_ctx_to_polys : expr → exmap →  bool → list pexpr → tactic (list expr × exmap × list poly)
+| expt m only_on hyps:=
 do
-  ctx ← tactic.local_context,
-  eq_names ← get_equalities_of_type expt ctx,
+  hyps ← hyps.mmap $ λ e, i_to_expr e,
+  hyps ← if only_on then return hyps else (++ hyps) <$> local_context,
+  -- ctx ← tactic.local_context,
+  eq_names ← get_equalities_of_type expt hyps,
   eqs ← eq_names.mmap infer_type,
   eqs_to_left ← eqs.mmap equality_to_left_side,
   (m, poly_list) ← mfoldl (fold_function expt) (m, []) eqs_to_left,
@@ -246,11 +249,11 @@ by ring_nf; simp only [complex.I_sq]; ring
 
 declare_trace polyrith
 
-meta def _root_.tactic.interactive.polyrith : tactic unit :=
+meta def tactic.polyrith (only_on : bool) (hyps : list pexpr): tactic unit :=
 do
   sleep 10, -- can lead to weird errors when actively editing code with polyrith calls
   (m, p, R) ← parse_target_to_poly,
-  (eq_names, m, polys) ← parse_ctx_to_polys R m,
+  (eq_names, m, polys) ← parse_ctx_to_polys R m only_on hyps,
   -- trace $ polys.mmap (poly.to_pexpr m) >>= mmap to_expr,
   -- trace R, 
   -- trace $ get_var_names m, 
@@ -264,80 +267,20 @@ do
   else do 
   coeffs_as_poly ← convert_sage_output sage_out,
   coeffs_as_pexpr ← coeffs_as_poly.mmap (poly.to_pexpr m),
-  let eq_names := eq_names.map expr.local_pp_name,  
+  let eq_names_pexpr := eq_names.map to_pexpr, -- expr.local_pp_name,   TODO
   coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
   -- trace coeffs_as_expr,
-  linear_combo.linear_combination eq_names coeffs_as_pexpr,
+  linear_combo.linear_combination eq_names_pexpr coeffs_as_pexpr,
   let components := (eq_names.zip coeffs_as_expr).filter $ λ pr, bnot $ pr.2.is_app_of `has_zero.zero,
   expr_string ← components.mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ format.line ++ ps) "",
   let cmd : format := "linear_combination" ++ format.nest 2 (format.group expr_string),
   trace!"Try this: {cmd}"
 
-constant p : ℚ → Prop 
-constants (R : Type) [inst_R : comm_ring R]
+--## Interactivity
+setup_tactic_parser
 
-example (a b c d : ℚ) (h : a + b = 0) (h2 : c + d = 0) : c + a + d + b = 0 :=
-begin 
-  linear_combination (h, 1) (h2, 1),
-end 
-
--- set_option trace.polyrith true
-
-example (x y z: ℤ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 + x*y^3 = 0 :=
-begin 
-  linear_combination (h, y ^ 2 * x) (h1, 4 * (y ^ 2 * x)),
-end
-
-theorem T
-  (a b x1 y1 x2 y2 x4 y4 :ℚ )
-  (A :y1*y1-x1*x1*x1-a*x1-b = 0)
-  (B :y2*y2-x2*x2*x2-a*x2-b = 0)
-  (C :y4*y4-x4*x4*x4-a*x4-b = 0)
-  {i3:ℚ} (Hi3:i3*(x2-x1)-1=0)
-  {k3:ℚ} (Hk3:(y2-y1)*i3-k3=0)
-  {x3:ℚ} (Hx3:k3*k3-x1-x2-x3=0)
-  {y3:ℚ} (Hy3:k3*(x1-x3)-y1-y3=0)
-  {i7:ℚ} (Hi7:i7*(x4-x3)-1=0)
-  {k7:ℚ} (Hk7:(y4-y3)*i7-k7=0)
-  {x7:ℚ} (Hx7:k7*k7-x3-x4-x7=0)
-  {y7:ℚ} (Hy7:k7*(x3-x7)-y3-y7=0)
-  {i6:ℚ} (Hi6:i6*(x4-x2)-1=0)
-  {k6:ℚ} (Hk6:(y4-y2)*i6-k6=0)
-  {x6:ℚ} (Hx6:k6*k6-x2-x4-x6=0)
-  {y6:ℚ} (Hy6:k6*(x2-x6)-y2-y6=0)
-  {i9:ℚ} (Hi9:i9*(x6-x1)-1=0)
-  {k9:ℚ} (Hk9:(y6-y1)*i9-k9=0)
-  {x9:ℚ} (Hx9:k9*k9-x1-x6-x9=0)
-  {y9:ℚ} (Hy9:k9*(x1-x9)-y1-y9=0)
-  : x9 - x7 = 0 ∧ y9 - y7 = 0 :=
-begin 
-  split, sorry, sorry,
-end
-
-theorem TT
-  (a b x1 y1 x2 y2 x4 y4 :ℚ )
-  (A :y1*y1-x1*x1*x1-a*x1-b = 0)
-  (B :y2*y2-x2*x2*x2-a*x2-b = 0)
-  (C :y4*y4-x4*x4*x4-a*x4-b = 0)
-  {i3:ℚ} (Hi3:i3*(x2-x1)-1=0)
-  {k3:ℚ} (Hk3:(y2-y1)*i3-k3=0)
-  {x3:ℚ} 
-  {y3:ℚ} 
-  {i7:ℚ} 
-  {k7:ℚ} 
-  {x7:ℚ} (Hx7:k7*k7-x3-x4-x7=0)
-  {y7:ℚ} (Hy7:k7*(x3-x7)-y3-y7=0)
-  {i6:ℚ} 
-  {k6:ℚ} 
-  {x6:ℚ} 
-  {y6:ℚ} 
-  {i9:ℚ} (Hi9:i9*(x6-x1)-1=0)
-  {k9:ℚ} (Hk9:(y6-y1)*i9-k9=0)
-  {x9:ℚ} (Hx9:k9*k9-x1-x6-x9=0)
-  {y9:ℚ} (Hy9:k9*(x1-x9)-y1-y9=0)
-  : x9 - x7 = 0 ∧ y9 - y7 = 0 :=
-begin 
-  split, 
-end
+meta def _root_.tactic.interactive.polyrith (restr : parse (tk "only")?)
+  (hyps : parse pexpr_list?) : tactic unit :=
+  tactic.polyrith restr.is_some (hyps.get_or_else [])
 
 end polyrith

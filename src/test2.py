@@ -253,8 +253,11 @@ def create_query(type: str, var_list, eq_list, goal_type):
 gens = {eq_list}
 p = {goal_type}
 I = ideal(gens)
-coeffs = p.lift(I)
-print(list(map(polynomial_to_string, coeffs)))
+try:
+    coeffs = p.lift(I)
+    print(list(map(polynomial_to_string, coeffs)))
+except ValueError:
+    print("The goal cannot be generated with the chosen hypotheses.")
 '''
     return query
 
