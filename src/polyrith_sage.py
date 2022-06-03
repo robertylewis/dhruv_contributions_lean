@@ -3,7 +3,7 @@ import urllib.parse
 import json
 import sys
 
-sage_functions = '''
+manual_grobner_basis_implementation = '''
 from sage.structure.sequence import Sequence
 import numpy as np
 
@@ -173,7 +173,9 @@ def ideal_membership(p, gens):
     b = np.array(quot).reshape((1,n))
 
     return basis, np.matmul(b,A), r
+'''
 
+polynomial_formatting_functions = '''
 def const_string(const):
     num = str(const)
     if "/" not in num:
@@ -263,8 +265,6 @@ except ValueError:
 
 
 def evaluate_in_sage(query: str, format=False) -> str:
-    # clean_query = urllib.parse.quote(query)
-    # It may be necessary to sanitize the query, but for now it seems to cause errors?
     if format:
         clean_query = query
         query = (f'print({clean_query})')
@@ -277,15 +277,11 @@ def evaluate_in_sage(query: str, format=False) -> str:
     else:
         raise Exception(response)
 
-# print(evaluate_in_sage('5+8'))
-# print(evaluate_in_sage('sin(3.1567)'))
-
-
 def main():
     command = create_query(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
-    final_query = sage_functions + "\n" + command
+    final_query = polynomial_formatting_functions + "\n" + command
     if sys.argv[1] == 'tt': # trace enabled
-        print(final_query)
+        print(command)
     else:
         output = evaluate_in_sage(final_query).replace("'", "")
         output = output.replace(",", "")
@@ -293,30 +289,6 @@ def main():
         output += " "
         print(output)
 
-    # for elt in sys.argv[1:]:
-    #     print(elt)
-
-def alt():
-    command = create_query("rat", "[var2, var1]",
-     "[((var1 + var2) + (-1 * 0)), ((var1 * var1) + (-1 * 0))]", "(((2 * var1) + (2 * var2)) + (-1 * 0))")
-    final_query = sage_functions + "\n" + command
-    output = evaluate_in_sage(final_query).replace("'", "")
-    output = output.replace(",", "")
-    output = output.replace("[", "").replace("]", "").strip()
-    output += " "
-    print(output)
-
-def alt2():
-    command = create_query(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
-    print(command)
-    # final_query = sage_functions + "\n" + command
-    # output = evaluate_in_sage(final_query).replace("'", "")
-    # output = output.replace(",", "")
-    # output = output.replace("[", "").replace("]", "").strip()
-    # output += " "
-    # print(output)
 
 if __name__ == "__main__":
     main()
-    # alt()
-    # alt2()
