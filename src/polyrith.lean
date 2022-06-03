@@ -523,13 +523,15 @@ do
 /-! # Interactivity -/
 setup_tactic_parser
 
-/--This makes the tactic interactive. It allows the user to call `polyrith`
+/--
+This makes the tactic interactive. It allows the user to call `polyrith`
 with an optional key word "only", after which the user must provide a list
 of those hypotheses and proof terms they want `polyrith` to use. 
 
 If the user does not use the key word "only", then they can still provide
 a list of proof terms that will be used in addition to the hypotheses in
-the local context.-/
+the local context.
+-/
 meta def _root_.tactic.interactive.polyrith (restr : parse (tk "only")?)
   (hyps : parse pexpr_list?) : tactic unit :=
   tactic.polyrith restr.is_some (hyps.get_or_else [])
