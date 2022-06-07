@@ -51,33 +51,6 @@ at Brown University.
 
 -/
 
-/-- 
-# Pexpr conversions
-
-`int.to_pexpr n` creates a `pexpr` that will evaluate to `n`.
-The `pexpr` does not hold any typing information:
-`to_expr ``((%%(int.to_pexpr (-5)) : ℚ))` will create a native integer numeral `(-5 : ℚ)`.
-
-note: in a mathlib PR
--/
-
-meta def int.to_pexpr : ℤ → pexpr
-| (int.of_nat k) := k.to_pexpr
-| (int.neg_succ_of_nat k) := ``(-%%((k+1).to_pexpr))
-
-/--
-`rat.to_pexpr q` creates a `pexpr` that will evaluate to `q`.
-The `pexpr` does not hold any typing information, as above.
-
-Note: also in pr
--/
-meta def rat.to_pexpr (q : ℚ) : pexpr :=
-let n := q.num,
-    d := q.denom in
-if d = 1 ∨ n = 0 then n.to_pexpr
-else ``(%%n.to_pexpr / %%d.to_pexpr)
-
-
 open tactic native
 
 namespace polyrith
@@ -467,7 +440,15 @@ contained in the `exmap`.
 meta def get_var_names : exmap → list string
 | [] := []
 | ((e, n) :: tl) := ("var" ++ to_string n) :: (get_var_names tl)
- 
+
+meta def component_to_lc_format : expr × expr → tactic format 
+| (ex, cf) := 
+  if cf.is_app_of `has_one.one then pformat!"{ex}" else 
+  if cf.is_app_of `has_add.add then pformat!"({cf}) * {ex}" else pformat!"{cf} * {ex}"
+
+meta def components_to_lc_format (components : list (expr × expr)) : tactic format :=
+format.intercalate (" +" ++ format.soft_break) <$> components.mmap component_to_lc_format
+
 /-!
 # Connecting with Python
 
@@ -500,7 +481,7 @@ to replace the call to `polyrith` with the appropriate call to
 -/
 meta def tactic.polyrith (only_on : bool) (hyps : list pexpr): tactic unit :=
 do
-  sleep 10, -- can lead to weird errors when actively editing code with polyrith calls
+  sleep 10, -- otherwise can lead to weird errors when actively editing code with polyrith calls
   (m, p, R) ← parse_target_to_poly,
   (eq_names, m, polys) ← parse_ctx_to_polys R m only_on hyps,
   let args := [to_string R, (get_var_names m).to_string, (polys.map poly.mk_string).to_string, p.mk_string],
@@ -515,8 +496,8 @@ do
   coeffs_as_expr ← coeffs_as_pexpr.mmap $ λ e, to_expr ``(%%e : %%R),
   linear_combo.linear_combination eq_names_pexpr coeffs_as_pexpr,
   let components := (eq_names.zip coeffs_as_expr).filter $ λ pr, bnot $ pr.2.is_app_of `has_zero.zero,
-  expr_string ← components.mfoldl (λ s p, do ps ← tactic.pp p, return $ s ++ format.line ++ ps) "",
-  let cmd : format := "linear_combination" ++ format.nest 2 (format.group expr_string),
+  expr_string ← components_to_lc_format components, 
+  let cmd : format := "linear_combination " ++ format.nest 2 (format.group expr_string),
   trace!"Try this: {cmd}"
 
 
