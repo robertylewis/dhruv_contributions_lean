@@ -255,14 +255,17 @@ def create_query(type: str, var_list, eq_list, goal_type):
 gens = {eq_list}
 p = {goal_type}
 I = ideal(gens)
-try:
-    coeffs = p.lift(I)
-    print(list(map(polynomial_to_string, coeffs)))
-except ValueError:
-    print("The goal cannot be generated with the chosen hypotheses.")
+coeffs = p.lift(I)
+print(list(map(polynomial_to_string, coeffs)))
 '''
     return query
 
+class EvaluationError(Exception):
+    def __init__(self, ename, evalue, message='Error in Sage communication'):
+        self.ename = ename 
+        self.evalue = evalue
+        self.message = message
+        super().__init__(self.message)
 
 def evaluate_in_sage(query: str, format=False) -> str:
     if format:
@@ -274,6 +277,8 @@ def evaluate_in_sage(query: str, format=False) -> str:
     response = json.loads(response.text)
     if response['success']:
         return response['stdout'] if 'stdout' in response else None 
+    elif 'execute_reply' in response and 'ename' in response['execute_reply'] and 'evalue' in response['execute_reply']:
+        raise EvaluationError(response['execute_reply']['ename'], response['execute_reply']['evalue'])
     else:
         raise Exception(response)
 
@@ -283,11 +288,14 @@ def main():
     if sys.argv[1] == 'tt': # trace enabled
         print(command)
     else:
-        output = evaluate_in_sage(final_query).replace("'", "")
-        output = output.replace(",", "")
-        output = output.replace("[", "").replace("]", "").strip()
-        output += " "
-        print(output)
+        try:
+            output = evaluate_in_sage(final_query).replace("'", "")
+            output = output.replace(",", "")
+            output = output.replace("[", "").replace("]", "").strip()
+            output += " "
+            print(output)
+        except EvaluationError as e:
+            print(f'%{e.ename}%{e.evalue}')
 
 
 if __name__ == "__main__":

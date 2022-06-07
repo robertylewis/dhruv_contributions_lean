@@ -196,7 +196,19 @@ a `poly` object. This is used later on to convert the coefficients given by Sage
 `poly` objects. 
 -/
 
+structure sage_error :=
+(kind : string)
+(message : string)
+
 open parser
+
+meta def error_parser : parser sage_error := do 
+  ch '%',
+  kind ← many_char1 (sat (≠ '%')),
+  ch '%',
+  msg ← list.as_string <$> many any_char,
+  return ⟨kind, msg⟩
+
 /--
 A parser object that parser `string`s of the form `"poly.var n"` 
 to the appropriate `poly` object representing a variable.
@@ -305,14 +317,14 @@ A parser object that converts the output of sage (which should be
 formatted as a collection of ``poly`s in `string` form, separated
  by a single space) into a `list poly`
 -/
-meta def sage_output_parser : parser (list poly) := do
-  poly_list ← many (one_of_many_poly_parser),
-  return poly_list
+meta def sage_output_parser : parser (sage_error ⊕ list poly) := 
+(sum.inl <$> error_parser) <|> sum.inr <$> many (one_of_many_poly_parser)
 
 /--A tactic that checks whether `sage_output_parser` worked-/
-meta def parser_output_checker : string ⊕ (list poly) → tactic (list poly) 
-|(sum.inl s) := fail "The goal cannot be generated with the chosen hypotheses."
-|(sum.inr poly_list) := return poly_list
+meta def parser_output_checker : string ⊕ (sage_error ⊕ list poly) → tactic (list poly) 
+| (sum.inl s) := fail "The goal cannot be generated with the chosen hypotheses."
+| (sum.inr (sum.inr poly_list)) := return poly_list
+| (sum.inr (sum.inl err)) := fail!"polyrith failed to retrieve a solution from Sage! {err.kind}: {err.message}"
 
 /--
 A tactic that uses the above defined parsers to convert 
