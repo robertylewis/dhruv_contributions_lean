@@ -8,14 +8,14 @@ constant term : ∀ a b : ℚ, a + b = 0
 
 example (a b c d : ℚ) (h : a + b = 0) (h2 : c + d = 0) (h3 : c + a = 0): c + a + d + b = 0 :=
 begin 
-  polyrith,
+  linear_combination h + h2
 end 
 
 -- set_option trace.polyrith true
 
 example (x y z: ℤ) (h: x + y = 0) (h1 : x^2 = 0): 4*x^3*y^2 + x^2*y^2 + x*y^3 = 0 :=
 begin 
-  polyrith,
+  linear_combination y ^ 2 * x * h + 4 * (y ^ 2 * x) * h1,
 end
 
 -- theorem T
@@ -52,10 +52,23 @@ example {K : Type*} [field K] [invertible 2] [invertible 3]
 begin
   have hs_nonzero : s ≠ 0,
   { contrapose! hp_nonzero with hs_nonzero,
-    polyrith,
+    linear_combination -1 * ht + t * hs_nonzero,
      },
   have H' : 2 * q = s ^ 3 - t ^ 3,
   { rw ← mul_left_inj' (pow_ne_zero 3 hs_nonzero),
-    polyrith,},
-  polyrith,
+    linear_combination -1 * hr + ((-1) * s ^ 3 + (-1) * r + q) * hs3 + (t ^ 2 * s ^ 2 + p * t * s + p ^ 2) * ht,},
+  linear_combination (ω ^ 4 * t + (-1) * (ω ^ 4 * s) + ω ^ 4 * x + ω ^ 3 * t + (-1) * (ω ^ 3 * s) +
+          ω ^ 2 * t +
+        (-1) * (ω ^ 2 * s) +
+      3 * (ω ^ 2 * x) +
+    2 * (ω * x)) * ht + ((-1) * (ω * t ^ 3) + ω * s ^ 3 + ω ^ 2 * t * p + (-1) * (ω ^ 2 * s * p) +
+                    (-1) * (ω * t ^ 2 * x) +
+                  (-1) * (ω * s ^ 2 * x) +
+                ω ^ 2 * p * x +
+              t ^ 3 +
+            (-1) * s ^ 3 +
+          (-1) * (ω * p * x) +
+        (-1) * (t * x ^ 2) +
+      s * x ^ 2 +
+    3 * (p * x)) * H + -1 * H',
 end
