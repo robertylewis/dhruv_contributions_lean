@@ -196,12 +196,19 @@ a `poly` object. This is used later on to convert the coefficients given by Sage
 `poly` objects. 
 -/
 
+/--
+An error message returned from Sage has a kind and a message.
+-/
 structure sage_error :=
 (kind : string)
 (message : string)
 
 open parser
 
+/--
+Parse an error message from the output of the polyrith python script. 
+The script formats errors as "%{kind}%{message}".
+-/
 meta def error_parser : parser sage_error := do 
   ch '%',
   kind ← many_char1 (sat (≠ '%')),
@@ -322,7 +329,7 @@ meta def sage_output_parser : parser (sage_error ⊕ list poly) :=
 
 /--A tactic that checks whether `sage_output_parser` worked-/
 meta def parser_output_checker : string ⊕ (sage_error ⊕ list poly) → tactic (list poly) 
-| (sum.inl s) := fail "The goal cannot be generated with the chosen hypotheses."
+| (sum.inl s) := fail!"polyrith failed to parse the output from Sage.\n\n{s}"
 | (sum.inr (sum.inr poly_list)) := return poly_list
 | (sum.inr (sum.inl err)) := fail!"polyrith failed to retrieve a solution from Sage! {err.kind}: {err.message}"
 
