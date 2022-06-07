@@ -524,6 +524,9 @@ do
 setup_tactic_parser
 
 /--
+TODO: this doc string should be filled in with text that looks like the tactic 
+descriptions at https://leanprover-community.github.io/mathlib_docs/tactics.html
+
 This makes the tactic interactive. It allows the user to call `polyrith`
 with an optional key word "only", after which the user must provide a list
 of those hypotheses and proof terms they want `polyrith` to use. 
@@ -536,6 +539,10 @@ meta def _root_.tactic.interactive.polyrith (restr : parse (tk "only")?)
   (hyps : parse pexpr_list?) : tactic unit :=
   tactic.polyrith restr.is_some (hyps.get_or_else [])
 
-add_hint_tactic "polyrith"
+add_tactic_doc 
+{ name := "polyrith",
+  category := doc_category.tactic,
+  decl_names := [`tactic.interactive.polyrith],
+  tags := ["arithmetic", "automation"] }
 
 end polyrith
