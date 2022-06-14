@@ -65,6 +65,7 @@ inductive poly
 |const: ℚ → poly 
 |var: ℕ → poly
 |add: poly → poly → poly
+|sub: poly → poly → poly
 |mul: poly → poly → poly
 |pow : poly → ℕ → poly
 
@@ -77,10 +78,12 @@ meta def poly.mk_string : poly → string
 | (poly.const z) := to_string z
 | (poly.var n) := "var" ++ to_string n
 | (poly.add p q) := "(" ++ poly.mk_string p ++ " + " ++ poly.mk_string q ++ ")"
+| (poly.sub p q) := "(" ++ poly.mk_string p ++ " - " ++ poly.mk_string q ++ ")"
 | (poly.mul p q) := "(" ++ poly.mk_string p ++ " * " ++ poly.mk_string q ++ ")"
 | (poly.pow p n) := to_string $ format!"({poly.mk_string p} ^ {n})"
 
 meta instance : has_add poly := ⟨poly.add⟩ 
+meta instance : has_sub poly := ⟨poly.sub⟩
 meta instance : has_mul poly := ⟨poly.mul⟩
 meta instance : has_pow poly ℕ := ⟨poly.pow⟩ 
 meta instance : has_repr poly := ⟨poly.mk_string⟩  
@@ -127,7 +130,7 @@ meta def poly_form_of_expr (red : transparency) : exmap → expr → tactic (exm
 | m `(%%e1 - %%e2) :=
    do (m', comp1) ← poly_form_of_expr m e1,
       (m', comp2) ← poly_form_of_expr m' e2,
-      return (m',  comp1 + ((poly.const (-1)) * comp2))
+      return (m',  comp1 - comp2)
 | m `(-%%e) := 
   do (m', comp) ← poly_form_of_expr m e,
      return (m', (poly.const (-1)) * comp)
@@ -177,6 +180,12 @@ meta def poly.to_pexpr :exmap → poly → tactic pexpr
     p_pexpr ← poly.to_pexpr m p,
     q_pexpr ← poly.to_pexpr m q,
     return ``(%%p_pexpr + %%q_pexpr)
+| m (poly.sub p q) :=
+  do
+    p_pexpr ← poly.to_pexpr m p,
+    q_pexpr ← poly.to_pexpr m q,
+    if p_pexpr = ``(0) then return ``(- %%q_pexpr) else
+    return ``(%%p_pexpr - %%q_pexpr)
 | m (poly.mul p q) := 
   do 
     p_pexpr ← poly.to_pexpr m p,
@@ -217,7 +226,7 @@ meta def error_parser : parser sage_error := do
   return ⟨kind, msg⟩
 
 /--
-A parser object that parser `string`s of the form `"poly.var n"` 
+A parser object that parses `string`s of the form `"poly.var n"` 
 to the appropriate `poly` object representing a variable.
 Here, `n` is a natural number
 -/
@@ -227,7 +236,7 @@ meta def var_parser : parser poly := do
   return (poly.var n)
 
 /--
-A parser object that parser `string`s of the form `"-n"` 
+A parser object that parses `string`s of the form `"-n"` 
 to the appropriate `poly` object representing a negative integer.
 Here, `n` is a natural number
 -/
@@ -237,7 +246,7 @@ meta def neg_nat_parser : parser int := do
   return (- n)
 
 /--
-A parser object that parser `string`s of the form `"-n"` 
+A parser object that parses `string`s of the form `"-n"` 
 to the appropriate `poly` object representing a positive integer. 
 Here, `n` is a natural number
 -/
@@ -246,7 +255,7 @@ meta def nat_as_int_parser : parser int := do
   return (n)
 
 /--
-A parser object that parser `string`s of the form `"poly.const z"` 
+A parser object that parses `string`s of the form `"poly.const z"` 
 to the appropriate `poly` object representing a rational coefficient.
 Here, `n` is a rational number
 -/
@@ -258,7 +267,7 @@ meta def const_fraction_parser : parser poly := do
   return (poly.const (numer/denom))
 
 /--
-A parser object that parser `string`s of the form `"poly.sum p q"` 
+A parser object that parses `string`s of the form `"poly.sum p q"` 
 to the appropriate `poly` object representing the sum of two `poly`s.
 Here, `p` and `q` are themselves string forms of `poly`s.
 -/
@@ -270,7 +279,19 @@ meta def add_parser (cont : parser poly) : parser poly := do
   return (poly.add lhs rhs)
 
 /--
-A parser object that parser `string`s of the form `"poly.mul p q"` 
+A parser object that parses `string`s of the form `"poly.sub p q"` 
+to the appropriate `poly` object representing the subtraction of two `poly`s.
+Here, `p` and `q` are themselves string forms of `poly`s.
+-/
+meta def sub_parser (cont : parser poly) : parser poly := do
+  str "poly.sub ",
+  lhs ← cont,
+  ch ' ',
+  rhs ← cont,
+  return (poly.sub lhs rhs)
+
+/--
+A parser object that parses `string`s of the form `"poly.mul p q"` 
 to the appropriate `poly` object representing the product of two `poly`s.
 Here, `p` and `q` are themselves string forms of `poly`s.
 -/
@@ -282,7 +303,7 @@ meta def mul_parser (cont : parser poly) : parser poly := do
   return (poly.mul lhs rhs)
 
 /--
-A parser object that parser `string`s of the form `"poly.pow p n"` 
+A parser object that parses `string`s of the form `"poly.pow p n"` 
 to the appropriate `poly` object representing a `poly` raised to the 
 power of a natural number. Here, `p` is the string form of a `poly`
 and `n` is a natural number.
@@ -300,7 +321,7 @@ A parser object that parses `string`s into `poly` objects.
 meta def poly_parser : parser poly := do
   ch '(',
   t ←  var_parser <|> const_fraction_parser <|> add_parser poly_parser 
-    <|> mul_parser poly_parser <|> pow_parser poly_parser,
+    <|> sub_parser poly_parser <|> mul_parser poly_parser <|> pow_parser poly_parser,
   ch ')',
   return t
 
@@ -460,11 +481,19 @@ meta def get_var_names : exmap → list string
 | [] := []
 | ((e, n) :: tl) := ("var" ++ to_string n) :: (get_var_names tl)
 
+/--
+Given a pair of `expr`s, where one represents the hypothesis/proof term,
+and the other representes the coefficient attached to it, this tactic
+creates a string combining the two in the appropriate format for
+linear_combination.
+-/
 meta def component_to_lc_format : expr × expr → tactic format 
 | (ex, cf) := 
   if cf.is_app_of `has_one.one then pformat!"{ex}" else 
-  if cf.is_app_of `has_add.add then pformat!"({cf}) * {ex}" else pformat!"{cf} * {ex}"
+  if cf.is_app_of `has_add.add then pformat!"({cf}) * {ex}" else
+  if cf.is_app_of `has_sub.sub then pformat!"({cf}) * {ex}" else pformat!"{cf} * {ex}"
 
+/--This tactic repeats the process above for a `list` of pairs of `expr`s.-/
 meta def components_to_lc_format (components : list (expr × expr)) : tactic format :=
 format.intercalate (" +" ++ format.soft_break) <$> components.mmap component_to_lc_format
 
@@ -524,16 +553,18 @@ do
 setup_tactic_parser
 
 /--
-TODO: this doc string should be filled in with text that looks like the tactic 
-descriptions at https://leanprover-community.github.io/mathlib_docs/tactics.html
+Attempts to prove polynomial equality goals through polynomial arithmetic
+on the hypotheses (and additional proof terms if the user specifies them).
+It proves the goal by generating an appropriate call to the tactic
+`linear_combination`. If this call succeeds, the call to `linear_combination`
+is suggested to the user.
 
-This makes the tactic interactive. It allows the user to call `polyrith`
-with an optional key word "only", after which the user must provide a list
-of those hypotheses and proof terms they want `polyrith` to use. 
+* `polyrith` will use all relevant hypotheses in the local context.
+* `polyrith [t1, t2, t3]` will add proof terms t1, t2, t3 to the local context.
+* `polyrith only [h1, h2, h3, t1, t2, t3]` will use only local hypotheses
+  `h1`, `h2`, `h3`, and proofs `t1`, `t2`, `t3`. It will ignore the rest of the local context.
 
-If the user does not use the key word "only", then they can still provide
-a list of proof terms that will be used in addition to the hypotheses in
-the local context.
+Note: This tactic only works with a working internet connection.
 -/
 meta def _root_.tactic.interactive.polyrith (restr : parse (tk "only")?)
   (hyps : parse pexpr_list?) : tactic unit :=
@@ -543,6 +574,6 @@ add_tactic_doc
 { name := "polyrith",
   category := doc_category.tactic,
   decl_names := [`tactic.interactive.polyrith],
-  tags := ["arithmetic", "automation"] }
+  tags := ["arithmetic", "automation", "polynomial", "grobner", "groebner"] }
 
 end polyrith

@@ -212,7 +212,11 @@ def poly_terms_string(terms):
     if terms == []:
         return const_string(1)
     elif len(terms) == 1:
+        if "-" in terms[0]:
+            return f'(poly.sub {const_string(0)} {terms[0].replace("-", "")})'
         return terms[0]
+    elif "-" in terms[-1]:
+        return f'(poly.sub {poly_terms_string(terms[:-1])} {terms[-1].replace("-", "")})'
     return f'(poly.sum {poly_terms_string(terms[:-1])} {terms[-1]})'
 
 def polynomial_to_string(p):
@@ -227,6 +231,8 @@ def polynomial_to_string(p):
             out.append(const_string(n))
         elif str(coeffs[i]) == "1":
             out.append(monomial_to_string(monomials[i]))
+        elif str(coeffs[i]) == "-1":
+            out.append("-" + monomial_to_string(monomials[i]))
         else:
             out.append("(poly.mul " + const_string(coeffs[i]) + " " + monomial_to_string(monomials[i]) + ")")
     return poly_terms_string(out)
