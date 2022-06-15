@@ -485,17 +485,39 @@ meta def get_var_names : exmap → list string
 Given a pair of `expr`s, where one represents the hypothesis/proof term,
 and the other representes the coefficient attached to it, this tactic
 creates a string combining the two in the appropriate format for
-linear_combination.
--/
-meta def component_to_lc_format : expr × expr → tactic format 
-| (ex, cf) := 
-  if cf.is_app_of `has_one.one then pformat!"{ex}" else 
-  if cf.is_app_of `has_add.add then pformat!"({cf}) * {ex}" else
-  if cf.is_app_of `has_sub.sub then pformat!"({cf}) * {ex}" else pformat!"{cf} * {ex}"
+`linear_combination`.
 
-/--This tactic repeats the process above for a `list` of pairs of `expr`s.-/
+The boolean value returned is `tt` if the format needs to be negated 
+to accurately reflect the input expressions.
+The negation is not applied in the format output by this function,
+because it may appear as a negation (if this is the first component)
+or a subtraction.
+-/
+meta def component_to_lc_format : expr × expr → tactic (bool × format)
+| (ex, `(-@has_one.one _ _)) := prod.mk tt <$> pformat!"{ex}"
+| (ex, `(@has_one.one _ _))  := prod.mk ff <$> pformat!"{ex}"
+| (ex, `(-%%cf)) := do (neg, fmt) ← component_to_lc_format (ex, cf), return (!neg, fmt)
+| (ex, cf@`(_ + _)) := prod.mk ff <$> pformat!"({cf}) * {ex}"
+| (ex, cf@`(_ - _)) := prod.mk ff <$> pformat!"({cf}) * {ex}"
+| (ex, cf) := trace cf.to_raw_fmt >> prod.mk ff <$> pformat!"{cf} * {ex}"
+
+private meta def intersperse_ops_aux : list (bool × format) → format 
+| [] := "" 
+| ((ff, fmt) :: t) := " +" ++ format.soft_break ++ fmt ++ intersperse_ops_aux t 
+| ((tt, fmt) :: t) := " -" ++ format.soft_break ++ fmt ++ intersperse_ops_aux t 
+
+/--
+Given a `list (bool × format)`, this function uses `+` and `-` to conjoin the
+`format`s in the list. A `format` is negated if its corresponding `bool` is `tt`. 
+-/
+meta def intersperse_ops : list (bool × format) → format 
+| [] := ""
+| ((ff, fmt)::t) := fmt ++ intersperse_ops_aux t 
+| ((tt, fmt)::t) := "-" ++ fmt ++ intersperse_ops_aux t 
+
+/-- This tactic repeats the process above for a `list` of pairs of `expr`s.-/
 meta def components_to_lc_format (components : list (expr × expr)) : tactic format :=
-format.intercalate (" +" ++ format.soft_break) <$> components.mmap component_to_lc_format
+intersperse_ops <$> components.mmap component_to_lc_format
 
 /-!
 # Connecting with Python
